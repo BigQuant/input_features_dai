@@ -81,6 +81,7 @@ SELECT
     instrument
 FROM {tables}
 {qualify}
+ORDER BY date, instrument
 """
 
 
