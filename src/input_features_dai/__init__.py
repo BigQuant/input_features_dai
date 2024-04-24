@@ -32,6 +32,7 @@ MODE0 = list(MODES.keys())[0]
 
 DEFAULT_SQL = """-- 使用DAI SQL获取数据，构建因子等，如下是一个例子作为参考
 -- DAI SQL 语法: https://bigquant.com/wiki/doc/dai-PLSbc1SbZX#h-sql%E5%85%A5%E9%97%A8%E6%95%99%E7%A8%8B
+-- 使用数据输入1/2/3里的字段: e.g. input_1.close, input_1.* EXCLUDE(date, instrument)
 
 SELECT
 
@@ -63,6 +64,7 @@ DEFAULT_EXPR = """-- DAI SQL 算子/函数: https://bigquant.com/wiki/doc/dai-PL
 -- 数据&字段: 数据文档 https://bigquant.com/data/home
 -- 数据使用: 表名.字段名, 对于没有指定表名的列，会从 expr_tables 推断
 -- 给输出数据列命名: AS field_name
+-- 使用数据输入1/2/3里的字段: e.g. input_1.close, input_1.* EXCLUDE(date, instrument)
 -- 在这里输入表达式, 每行一个表达式, 会根据这个输入解析表名并构建查询和计算SQL,
 
 cn_stock_bar1d.close / cn_stock_bar1d.open AS daily_change
@@ -79,17 +81,6 @@ SELECT
     instrument
 FROM {tables}
 {qualify}
-"""
-
-SQL_JOIN_TEMPLATE = """
-WITH {table_id} AS (
-{sql}
-)
-SELECT
-    {base_table_id}.*,
-    {table_id}.score
-FROM {base_table_id}
-JOIN {table_id} USING(date, instrument)
 """
 
 
@@ -184,6 +175,7 @@ def run(
         default=DEFAULT_SQL,
         auto_complete_type="sql",
     ) = None,
+    extract_data: I.bool("抽取数据，是否抽取数据，如果抽取数据，将返回一个BDB DataSource，包含数据DataFrame") = False,
 ) -> [I.port("输出(SQL文件)", "data")]:
     """输入特征（因子）数据"""
     import dai
@@ -197,7 +189,15 @@ def run(
 
     sql = _process_inputs(sql, input_1, input_2, input_3)
 
-    return I.Outputs(data=dai.DataSource.write_json({"sql": sql}))
+    if extract_data:
+        logger.info("extract data ..")
+        df = dai.query(sql).df()
+        logger.info(f"extracted {df.shape}.")
+        data_ds = dai.DataSource.write_bdb(df)
+    else:
+        data_ds = dai.DataSource.write_json({"sql": sql})
+
+    return I.Outputs(data=data_ds)
 
 
 def post_run(outputs):
