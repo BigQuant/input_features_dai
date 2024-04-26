@@ -70,6 +70,8 @@ DEFAULT_EXPR = """-- DAI SQL 算子/函数: https://bigquant.com/wiki/doc/dai-PL
 cn_stock_bar1d.close / cn_stock_bar1d.open AS daily_change
 c_rank(cn_stock_valuation.total_market_cap) AS rank_total_market_cap
 m_lag(rank_total_market_cap, 2) AS rank_total_market_cap_2
+date
+instrument
 """
 
 TABLE_NAME_RE = re.compile(r"(?<!\.)\b[a-zA-Z_]\w*\b(?=\.[a-zA-Z_*])")
@@ -77,11 +79,9 @@ TABLE_NAME_RE = re.compile(r"(?<!\.)\b[a-zA-Z_]\w*\b(?=\.[a-zA-Z_*])")
 EXPR_SQL_TEMPLATE = """
 SELECT
     {expr},
-    date,
-    instrument
 FROM {tables}
 {qualify}
-ORDER BY date, instrument
+{order_by}
 """
 
 
@@ -113,7 +113,7 @@ def _build_table(ds) -> dict:
     }
 
 
-def _build_sql_from_expr(expr: str, default_tables="", expr_drop_na=True, multi_expr=True):
+def _build_sql_from_expr(expr: str, default_tables="", order_by="", expr_drop_na=True, multi_expr=True):
     lines = []
     for line in expr.splitlines():
         line = line.strip()
@@ -144,7 +144,10 @@ def _build_sql_from_expr(expr: str, default_tables="", expr_drop_na=True, multi_
     if expr_drop_na:
         qualify = "QUALIFY\n    COLUMNS(*) IS NOT NULL"
 
-    return EXPR_SQL_TEMPLATE.format(expr=",\n    ".join(exprs), tables="\n    JOIN ".join(tables), qualify=qualify)
+    # ORDER BY date, instrument
+    if order_by:
+        order_by = f"ORDER BY {order_by}"
+    return EXPR_SQL_TEMPLATE.format(expr=",\n    ".join(exprs), tables="\n    JOIN ".join(tables), qualify=qualify, order_by=order_by)
 
 
 def _process_inputs(sql, *inputs):
@@ -159,8 +162,47 @@ def _process_inputs(sql, *inputs):
     return create_table_sql + sql
 
 
+def _ds_passthourgh(ds, do_log=True):
+    # e.g. 上游数据抽取模块的start/end date，bigtrader会根据这个时间确定回测开始结束时间
+    import dai
+
+    data = {}
+
+    if ds is not None and isinstance(ds, dai.DataSource):
+        try:
+            extra = ds.metadata.get("extra", "")
+            if extra:
+                data["extra"] = extra
+        except:
+            # in case there's no metadata
+            pass
+
+    if do_log and data:
+        logger.info(f"ds passthourgh {data}")
+
+    return data
+
+
+def _create_ds_from_sql(sql: str, extract_data: bool, base_ds=None):
+    import dai
+
+    if extract_data:
+        logger.info("extract data ..")
+        try:
+            df = dai.query(sql).df()
+        except:
+            logger.error(f"dai query failed: {sql}")
+            raise
+        logger.info(f"extracted {df.shape}.")
+        ds = dai.DataSource.write_bdb(df, base_ds=base_ds)
+    else:
+        ds = dai.DataSource.write_json({"sql": sql}, base_ds=base_ds)
+
+    return ds
+
+
 def run(
-    input_1: I.port("数据输入1", specific_type_name="DataSource", optional=True) = None,
+    input_1: I.port("数据输入1，如果有metadata extra，会传递给输出 data", specific_type_name="DataSource", optional=True) = None,
     input_2: I.port("数据输入2", specific_type_name="DataSource", optional=True) = None,
     input_3: I.port("数据输入3", specific_type_name="DataSource", optional=True) = None,
     mode: I.choice("输入模式", list(MODES.keys())) = MODE0,
@@ -170,6 +212,7 @@ def run(
         auto_complete_type="sql",
     ) = None,
     expr_tables: I.str("表达式-默认数据表，对于没有给出表名的字段，默认来自这些表，只填写需要的表，可以提高性能，多个表名用英文逗号分隔") = "cn_stock_factors",
+    order_by: I.str("表达式-排序字段，排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值，去掉包含空值的行，用于表达式模式的参数") = True,
     sql: I.code(
         "SQL特征，通过SQL来构建特征，更加灵活，功能最全面",
@@ -179,26 +222,19 @@ def run(
     extract_data: I.bool("抽取数据，是否抽取数据，如果抽取数据，将返回一个BDB DataSource，包含数据DataFrame") = False,
 ) -> [I.port("输出(SQL文件)", "data")]:
     """输入特征（因子）数据"""
-    import dai
-
     mode = MODES[mode]
     if mode == "sql":
         logger.info("sql mode")
     else:
         logger.info("expr mode")
-        sql = _build_sql_from_expr(expr, expr_tables, expr_drop_na=expr_drop_na, multi_expr=True)
+        if "date" not in expr or "instrument" not in expr:
+            logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
+        sql = _build_sql_from_expr(expr, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, multi_expr=True)
 
     sql = _process_inputs(sql, input_1, input_2, input_3)
 
-    if extract_data:
-        logger.info("extract data ..")
-        df = dai.query(sql).df()
-        logger.info(f"extracted {df.shape}.")
-        data_ds = dai.DataSource.write_bdb(df)
-    else:
-        data_ds = dai.DataSource.write_json({"sql": sql})
-
-    return I.Outputs(data=data_ds)
+    # 使用第一个input ds的 extra
+    return I.Outputs(data=_create_ds_from_sql(sql, extract_data, input_1))
 
 
 def post_run(outputs):
