@@ -271,7 +271,6 @@ def run(
     # 替换 input_*
     for x in input_tables["items"]:
         sql = re.sub(rf'\b{x["name"]}\b', x["table_id"], sql)
-    sql = input_tables["sql"] + sql
 
     # 使用第一个input ds的 extra
     return I.Outputs(data=_create_ds_from_sql(sql, extract_data, input_1))
