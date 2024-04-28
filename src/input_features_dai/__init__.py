@@ -209,7 +209,7 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
 
     sql = EXPR_SQL_TEMPLATE.format(expr=",\n    ".join(expr_lines), tables=tables, qualify=qualify, order_by=order_by)
 
-    return input_tables["sql"] + sql
+    return sql
 
 
 def _create_ds_from_sql(sql: str, extract_data: bool, base_ds=None):
@@ -262,8 +262,8 @@ def run(
     mode = MODES[mode]
     if mode == "expr":
         logger.info("expr mode")
-        if "date" not in expr or "instrument" not in expr:
-            logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
+        # if "date" not in expr or "instrument" not in expr:
+        #     logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
         sql = _build_sql_from_expr(expr, expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables)
     else:
         logger.info("sql mode")
@@ -271,6 +271,8 @@ def run(
     # 替换 input_*
     for x in input_tables["items"]:
         sql = re.sub(rf'\b{x["name"]}\b', x["table_id"], sql)
+
+    sql = input_tables["sql"] + sql
 
     # 使用第一个input ds的 extra
     return I.Outputs(data=_create_ds_from_sql(sql, extract_data, input_1))

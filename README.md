@@ -1,6 +1,8 @@
 # 输入特征(DAI SQL)
 
-input_features_dai 模块输入 SQL，可用于因子和特征抽取、数据标注等。
+- input_features_dai 模块输入 SQL，可用于因子和特征抽取、数据标注等。
+    - 通过此模块和多层组合可以实现大部分数据查询和计算需求
+- [模块文档](https://bigquant.com/wiki/doc/aistudio-HVwrgP4J1A#h-输入特征dai-sql)
 
 ## 模块开发
 
