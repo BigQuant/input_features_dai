@@ -151,7 +151,8 @@ def _ds_to_tables(inputs) -> dict:
 
     return {
         "items": tables,
-        "sql": "".join([x["sql"] for x in tables])
+        "map": {x["name"]: x for x in tables},
+        "sql": "".join([x["sql"] for x in tables]),
     }
 
 
@@ -185,6 +186,8 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
             s = x.split(" ", 1)
             join_usings[s[0]] = s[1]
             x = s[0]
+        if x in input_tables["map"]:
+            x = input_tables["map"][x]["table_id"]
         # TODO: process x is input_*
         if x not in table_set:
             table_list.append(x)
@@ -266,8 +269,8 @@ def run(
         logger.info("sql mode")
 
     # 替换 input_*
-    for x in input_tables:
-        sql = re.sub(rf"\b{x[0]}\b", x[1], sql)
+    for x in input_tables["items"]:
+        sql = re.sub(rf'\b{x["name"]}\b', x["table_id"], sql)
 
     # 使用第一个input ds的 extra
     return I.Outputs(data=_create_ds_from_sql(sql, extract_data, input_1))
