@@ -99,7 +99,7 @@ TABLE_NAME_RE = re.compile(r"(?<!\.)\b[a-zA-Z_]\w*\b(?=\.[a-zA-Z_*])")
 
 EXPR_SQL_TEMPLATE = """
 SELECT
-    {expr},
+    {expr}
 FROM {tables}
 {qualify}
 {order_by}
@@ -167,6 +167,7 @@ def _split_expr(expr):
 
 def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_by="", expr_drop_na=True, input_tables={}):
     expr_lines = _split_expr(expr)
+    print(expr, expr_lines)
     filter_lines = _split_expr(expr_filters)
 
     # collect all tables, join them
@@ -242,7 +243,7 @@ def run(
         auto_complete_type="sql",
     ) = None,
     expr_tables: I.str("表达式-默认数据表, 对于没有给出表名的字段, 默认来自这些表, 只填写需要的表, 可以提高性能, 多个表名用英文逗号分隔") = "cn_stock_factors",
-    extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date,instrument",
+    extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date, instrument",
     order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
     sql: I.code(
@@ -261,7 +262,7 @@ def run(
         logger.info("expr mode")
         # if "date" not in expr or "instrument" not in expr:
         #     logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
-        sql = _build_sql_from_expr(expr + "\n" + extra_fields, expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables)
+        sql = _build_sql_from_expr(expr + "\n" + extra_fields.replace(",", "\n"), expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables)
     else:
         logger.info("sql mode")
 
