@@ -167,7 +167,6 @@ def _split_expr(expr):
 
 def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_by="", expr_drop_na=True, input_tables={}):
     expr_lines = _split_expr(expr)
-    print(expr, expr_lines)
     filter_lines = _split_expr(expr_filters)
 
     # collect all tables, join them
