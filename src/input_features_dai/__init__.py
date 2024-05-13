@@ -180,6 +180,9 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
     for x in tables:
         if " USING(" in x:
             s = x.split(" ", 1)
+            # input_* table
+            if s[0] in input_tables["map"]:
+                s[0] = input_tables["map"][s[0]]["table_id"]
             join_usings[s[0]] = s[1]
             x = s[0]
         if x in input_tables["map"]:
@@ -189,7 +192,7 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
             table_list.append(x)
         table_set.add(x)
     for i in range(1, len(table_list)):
-        table_list[i] += join_usings.get(table_list[i], " USING(date, instrument)")
+        table_list[i] += " " + join_usings.get(table_list[i], "USING(date, instrument)").strip()
     tables = "\n    JOIN ".join(table_list)
 
     # 构建过滤添加，放到 QUALIFY 里
