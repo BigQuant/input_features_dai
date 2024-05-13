@@ -52,7 +52,7 @@ SELECT
     date, instrument
 FROM
     -- 预计算因子 cn_stock_bar1d https://bigquant.com/data/datasources/cn_stock_bar1d
-    cn_stock_factors
+    cn_stock_prefactors
     -- SQL 模式不会自动join输入数据源, 可以根据需要自由灵活的使用
     -- JOIN input_1 USING(date, instrument)
 WHERE
@@ -77,8 +77,8 @@ DEFAULT_EXPR = """-- DAI SQL 算子/函数: https://bigquant.com/wiki/doc/dai-PL
 m_lag(close, 90) / close AS return_90
 m_lag(close, 30) / close AS return_30
 -- cn_stock_bar1d.close / cn_stock_bar1d.open
--- cn_stock_factors https://bigquant.com/data/datasources/cn_stock_factors 是常用因子表(VIEW), JOIN了很多数据表, 性能会比直接用相关表慢一点, 但使用简单
--- cn_stock_factors.pe_ttm
+-- cn_stock_prefactors https://bigquant.com/data/datasources/cn_stock_prefactors 是常用因子表(VIEW), JOIN了很多数据表, 性能会比直接用相关表慢一点, 但使用简单
+-- cn_stock_prefactors.pe_ttm
 
 -- 表达式模式下, 会自动join输入数据1/2/3, 可以在表达式里直接使用其字段。包括 input_1 的所有列但去掉 date, instrument。注意字段不能有重复的, 否则会报错
 -- input_1.* EXCLUDE(date, instrument)
@@ -241,7 +241,7 @@ def run(
         default=DEFAULT_EXPR_FILTERS,
         auto_complete_type="sql",
     ) = None,
-    expr_tables: I.str("表达式-默认数据表, 对于没有给出表名的字段, 默认来自这些表, 只填写需要的表, 可以提高性能, 多个表名用英文逗号分隔") = "cn_stock_factors",
+    expr_tables: I.str("表达式-默认数据表, 对于没有给出表名的字段, 默认来自这些表, 只填写需要的表, 可以提高性能, 多个表名用英文逗号分隔") = "cn_stock_prefactors",
     extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date, instrument",
     order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
