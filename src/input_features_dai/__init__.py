@@ -170,7 +170,7 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
     filter_lines = _split_expr(expr_filters)
 
     # collect all tables, join them
-    tables = [x.strip() for x in default_tables.split(",") if x.strip()] + [x["table_id"] for x in input_tables["items"]]
+    tables = [x.strip() for x in default_tables.split(";") if x.strip()] + [x["table_id"] for x in input_tables["items"]]
     for line in expr_lines + filter_lines:
         tables += TABLE_NAME_RE.findall(line)
     # de-dup and add using primary key
@@ -190,7 +190,7 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
         table_set.add(x)
     for i in range(1, len(table_list)):
         table_list[i] += join_usings.get(table_list[i], " USING(date, instrument)")
-    tables="\n    JOIN ".join(table_list)
+    tables = "\n    JOIN ".join(table_list)
 
     # 构建过滤添加，放到 QUALIFY 里
     if expr_drop_na:
@@ -241,10 +241,13 @@ def run(
         default=DEFAULT_EXPR_FILTERS,
         auto_complete_type="sql",
     ) = None,
-    expr_tables: I.str("表达式-默认数据表, 对于没有给出表名的字段, 默认来自这些表, 只填写需要的表, 可以提高性能, 多个表名用英文逗号分隔") = "cn_stock_prefactors",
+    expr_tables: I.str(
+        "表达式-默认数据表, 对于没有给出表名的字段, 默认来自这些表, 只填写需要的表, 可以提高性能, 多个表名用英文分号(;)分隔"
+    ) = "cn_stock_prefactors",
     extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date, instrument",
     order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
+    expr_add_sql: I.bool("表达式-添加SQL特征语句, 在表达式模式下，把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前") = False,
     sql: I.code(
         "SQL特征, 通过SQL来构建特征, 更加灵活, 功能最全面",
         default=DEFAULT_SQL,
@@ -256,23 +259,31 @@ def run(
 
     input_tables = _ds_to_tables([input_1, input_2, input_3])
 
+    if "；" in expr_tables:
+        raise Exception("检测到中文分号在 表达式-默认数据表 参数中，请使用英文分号")
+
     mode = MODES[mode]
     if mode == "expr":
         logger.info("expr mode")
         # if "date" not in expr or "instrument" not in expr:
         #     logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
-        sql = _build_sql_from_expr(expr + "\n" + extra_fields.replace(",", "\n"), expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables)
+        final_sql = _build_sql_from_expr(
+            expr + "\n" + extra_fields.replace(",", "\n"), expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables
+        )
+        if expr_add_sql:
+            final_sql = sql.strip() + "\n" + final_sql
     else:
         logger.info("sql mode")
+        final_sql = sql
 
     # 替换 input_*
     for x in input_tables["items"]:
-        sql = re.sub(rf'\b{x["name"]}\b', x["table_id"], sql)
+        final_sql = re.sub(rf'\b{x["name"]}\b', x["table_id"], final_sql)
 
-    sql = input_tables["sql"] + sql
+    final_sql = input_tables["sql"] + final_sql
 
     # 使用第一个input ds的 extra
-    return I.Outputs(data=_create_ds_from_sql(sql, extract_data, input_1))
+    return I.Outputs(data=_create_ds_from_sql(final_sql, extract_data, input_1))
 
 
 def post_run(outputs):
