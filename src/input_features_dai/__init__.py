@@ -95,6 +95,8 @@ DEFAULT_EXPR_FILTERS = """-- DAI SQL 算子/函数: https://bigquant.com/wiki/do
 -- cn_stock_bar1d.turn > 0.02
 """
 
+# 去除单引号内的内容字符串: instrument in ('jm2201.DCE') 避免抽取出 jm2201
+REMOVE_STRING_RE = re.compile(r"'[^']*'")
 TABLE_NAME_RE = re.compile(r"(?<!\.)\b[a-zA-Z_]\w*\b(?=\.[a-zA-Z_*])")
 
 EXPR_SQL_TEMPLATE = """
@@ -172,7 +174,7 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
     # collect all tables, join them
     tables = [x.strip() for x in default_tables.split(";") if x.strip()] + [x["table_id"] for x in input_tables["items"]]
     for line in expr_lines + filter_lines:
-        tables += TABLE_NAME_RE.findall(line)
+        tables += TABLE_NAME_RE.findall(REMOVE_STRING_RE.sub('', line))
     # de-dup and add using primary key
     join_usings = {}
     table_set = set()
