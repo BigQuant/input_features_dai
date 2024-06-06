@@ -252,7 +252,6 @@ def run(
     extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date, instrument",
     order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
-    # expr_add_sql: I.bool("表达式-添加SQL特征语句, 在表达式模式下，把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前") = False,
     sql: I.code(
         "SQL特征, 在SQL模式下, 通过SQL来构建特征, 更加灵活, 功能最全面。 在表达式模式下，会把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前",
         default=DEFAULT_SQL,
