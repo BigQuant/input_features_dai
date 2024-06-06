@@ -272,7 +272,7 @@ def run(
         # if "date" not in expr or "instrument" not in expr:
         #     logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
         if expr is None:
-            logger.error("expr 模式下， 表达式特征输入为空")
+            logger.error("expr 模式下， 表达式特征输入为空！")
             raise
 
         if expr_filters is None:
@@ -288,6 +288,7 @@ def run(
         if sql is None:
             logger.error("sql 模式下， SQL特征输入为空！")
             raise
+
         final_sql = sql
 
     # 替换 input_*
