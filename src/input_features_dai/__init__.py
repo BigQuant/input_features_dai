@@ -252,9 +252,9 @@ def run(
     extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date, instrument",
     order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
-    expr_add_sql: I.bool("表达式-添加SQL特征语句, 在表达式模式下，把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前") = False,
+    # expr_add_sql: I.bool("表达式-添加SQL特征语句, 在表达式模式下，把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前") = False,
     sql: I.code(
-        "SQL特征, 通过SQL来构建特征, 更加灵活, 功能最全面",
+        "SQL特征, 在SQL模式下, 通过SQL来构建特征, 更加灵活, 功能最全面。 在表达式模式下，会把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前",
         default=DEFAULT_SQL,
         auto_complete_type="sql",
     ) = None,
@@ -265,20 +265,29 @@ def run(
     input_tables = _ds_to_tables([input_1, input_2, input_3])
 
     if "；" in expr_tables:
-        raise Exception("检测到中文分号在 表达式-默认数据表 参数中，请使用英文分号")
+        # raise Exception("检测到中文分号在 表达式-默认数据表 参数中，请使用英文分号")
+        expr_tables = expr_tables.replace("；", ";")
 
     mode = MODES[mode]
     if mode == "expr":
         logger.info("expr mode")
         # if "date" not in expr or "instrument" not in expr:
         #     logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
+        if expr is None:
+            raise ValueError("expr 模式下， 表达式特征输入为空！")
+
+        if expr_filters is None:
+            expr_filters = ""
+
         final_sql = _build_sql_from_expr(
             expr + "\n" + extra_fields.replace(",", "\n"), expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables
         )
-        if expr_add_sql:
+        if sql is not None:
             final_sql = sql.strip() + "\n" + final_sql
     else:
         logger.info("sql mode")
+        if sql is None:
+            raise ValueError("SQL 模式下， SQL特征输入为空！")
         final_sql = sql
 
     # 替换 input_*
