@@ -264,6 +264,7 @@ def run(
     input_tables = _ds_to_tables([input_1, input_2, input_3])
 
     if "；" in expr_tables:
+        logger.warning("检测到中文分号在 表达式-默认数据表 参数中，请使用英文分号。已自动替换，下次使用时请注意，否则可能导致意外的错误。")
         expr_tables = expr_tables.replace("；", ";")
 
     mode = MODES[mode]
@@ -272,8 +273,7 @@ def run(
         # if "date" not in expr or "instrument" not in expr:
         #     logger.warning("not found date/instrument in expr, the new version will not add date, instrument by default")
         if expr is None:
-            logger.error("expr 模式下， 表达式特征输入为空！")
-            raise
+            expr = ""
 
         if expr_filters is None:
             expr_filters = ""
