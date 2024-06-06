@@ -264,7 +264,6 @@ def run(
     input_tables = _ds_to_tables([input_1, input_2, input_3])
 
     if "；" in expr_tables:
-        # raise Exception("检测到中文分号在 表达式-默认数据表 参数中，请使用英文分号")
         expr_tables = expr_tables.replace("；", ";")
 
     mode = MODES[mode]
