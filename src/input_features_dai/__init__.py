@@ -282,7 +282,7 @@ def run(
             expr + "\n" + extra_fields.replace(",", "\n"), expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables
         )
         if sql is not None:
-            final_sql = sql.strip() + "\n" + final_sql
+            final_sql = sql.strip() + ";\n" + final_sql
     else:
         logger.info("sql mode")
         if sql is None:
