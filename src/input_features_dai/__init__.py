@@ -253,7 +253,7 @@ def run(
     order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
     expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
     sql: I.code(
-        "SQL特征, 在SQL模式下, 通过SQL来构建特征, 更加灵活, 功能最全面。 在表达式模式下，会把 SQL特征 输入的SQL语句加入到表达式模式构建的SQL前",
+        "SQL特征, 在SQL模式下, 通过SQL来构建特征, 更加灵活, 功能最全面。",
         default=DEFAULT_SQL,
         auto_complete_type="sql",
     ) = None,
@@ -281,8 +281,8 @@ def run(
         final_sql = _build_sql_from_expr(
             expr + "\n" + extra_fields.replace(",", "\n"), expr_filters, expr_tables, order_by=order_by, expr_drop_na=expr_drop_na, input_tables=input_tables
         )
-        if sql is not None:
-            final_sql = sql.strip() + ";\n" + final_sql
+        # if sql is not None:
+        #     final_sql = sql.strip() + ";\n" + final_sql
     else:
         logger.info("sql mode")
         if sql is None:
