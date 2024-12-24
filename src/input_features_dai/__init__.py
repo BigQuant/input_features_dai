@@ -1,4 +1,4 @@
-"""input_features_dai 模块输入 SQL, 可用于因子和特征抽取、数据标注等"""
+"""input_features_dai module for input SQL, used for factor and feature extraction, data labeling, etc."""
 
 import re
 import uuid
@@ -11,91 +11,84 @@ from bigmodule import I  # noqa: N812
 logger = structlog.get_logger()
 
 # metadata
-# 模块作者
+# Module author
 author = "BigQuant"
-# 模块分类
-category = "数据"
-# 模块显示名
-friendly_name = "输入特征(DAI SQL)"
-# 文档地址, optional
-doc_url = "https://bigquant.com/wiki/doc/aistudio-aiide-NzAjgKapzW#h-输入特征dai-sql"
-# 是否自动缓存结果
+# Module category
+category = "Data"
+# Module display name
+friendly_name = "Input Features (DAI SQL)"
+# Documentation URL, optional
+doc_url = "wiki/doc/aistudio-aiide-NzAjgKapzW#h-Input-Features-Dai-SQL"
+# Whether to automatically cache results
 cacheable = True
 
 MODES = OrderedDict(
     [
-        ("表达式", "expr"),
+        ("Expression", "expr"),
         ("SQL", "sql"),
     ]
 )
 MODE0 = list(MODES.keys())[0]
 
-DEFAULT_SQL = """-- 使用DAI SQL获取数据, 构建因子等, 如下是一个例子作为参考
--- DAI SQL 语法: https://bigquant.com/wiki/doc/dai-PLSbc1SbZX#h-sql%E5%85%A5%E9%97%A8%E6%95%99%E7%A8%8B
--- 使用数据输入1/2/3里的字段: e.g. input_1.close, input_1.* EXCLUDE(date, instrument)
+DEFAULT_SQL = """-- Use DAI SQL to get data, build factors, etc., the following is an example for reference
+-- Use fields from data inputs 1/2/3: e.g. input_1.close, input_1.* EXCLUDE(date, instrument)
 
 SELECT
-    -- 在这里输入因子表达式
-    -- DAI SQL 算子/函数: https://bigquant.com/wiki/doc/dai-PLSbc1SbZX#h-%E5%87%BD%E6%95%B0
-    -- 数据&字段: 数据文档 https://bigquant.com/data/home
+    -- Enter factor expressions here
 
     m_lag(close, 90) / close AS return_90,
     m_lag(close, 30) / close AS return_30,
-    -- 下划线开始命名的列是中间变量, 不会在最终结果输出 (e.g. _rank_return_90)
+    -- Columns starting with underscores are intermediate variables, not included in final output (e.g. _rank_return_90)
     c_pct_rank(-return_90) AS _rank_return_90,
     c_pct_rank(return_30) AS _rank_return_30,
 
     c_rank(volume) AS rank_volume,
     close / m_lag(close, 1) as return_0,
 
-    -- 日期和股票代码
+    -- Date and stock code
     date, instrument
 FROM
-    -- 预计算因子 cn_stock_bar1d https://bigquant.com/data/datasources/cn_stock_bar1d
     cn_stock_prefactors
-    -- SQL 模式不会自动join输入数据源, 可以根据需要自由灵活的使用
+    -- SQL mode does not automatically join input data sources, can be used freely as needed
     -- JOIN input_1 USING(date, instrument)
 WHERE
-    -- WHERE 过滤, 在窗口等计算算子之前执行
-    -- 剔除ST股票
+    -- WHERE filtering, executed before window functions
+    -- Exclude ST stocks
     st_status = 0
 QUALIFY
-    -- QUALIFY 过滤, 在窗口等计算算子之后执行, 比如 m_lag(close, 3) AS close_3, 对于 close_3 的过滤需要放到这里
-    -- 去掉有空值的行
+    -- QUALIFY filtering, executed after window functions, e.g. m_lag(close, 3) AS close_3, filters on close_3 should be placed here
+    -- Remove rows with null values
     COLUMNS(*) IS NOT NULL
-    -- _rank_return_90 是窗口函数结果，需要放在 QUALIFY 里
+    -- _rank_return_90 is a result of a window function, needs to be placed in QUALIFY
     AND _rank_return_90 > 0.1
     AND _rank_return_30 < 0.1
--- 按日期和股票代码排序, 从小到大
+-- Order by date and stock code, ascending
 ORDER BY date, instrument
 """
 
-DEFAULT_EXPR = """-- DAI SQL 算子/函数: https://bigquant.com/wiki/doc/dai-PLSbc1SbZX#h-%E5%87%BD%E6%95%B0
--- 数据&字段: 数据文档 https://bigquant.com/data/home
--- 数据使用: 表名.字段名, 对于没有指定表名的列, 会从 expr_tables 推断, 如果同名字段在多个表中出现, 需要显式的给出表名
+DEFAULT_EXPR = """
+-- Data usage: table_name.column_name, for columns without specified table names, will infer from expr_tables, if the same column appears in multiple tables, need to specify the table name explicitly
 
 m_lag(close, 90) / close AS return_90
 m_lag(close, 30) / close AS return_30
 -- cn_stock_bar1d.close / cn_stock_bar1d.open
--- cn_stock_prefactors https://bigquant.com/data/datasources/cn_stock_prefactors 是常用因子表(VIEW), JOIN了很多数据表, 性能会比直接用相关表慢一点, 但使用简单
 -- cn_stock_prefactors.pe_ttm
 
--- 表达式模式下, 会自动join输入数据1/2/3, 可以在表达式里直接使用其字段。包括 input_1 的所有列但去掉 date, instrument。注意字段不能有重复的, 否则会报错
+-- In expression mode, automatically join input data 1/2/3, can directly use their fields. Including all columns of input_1 except date, instrument. Note that field names cannot be duplicated, otherwise it will cause errors
 -- input_1.* EXCLUDE(date, instrument)
 -- input_1.close
 -- input_2.close / input_1.close
 """
 
-DEFAULT_EXPR_FILTERS = """-- DAI SQL 算子/函数: https://bigquant.com/wiki/doc/dai-PLSbc1SbZX#h-%E5%87%BD%E6%95%B0
--- 数据&字段: 数据文档 https://bigquant.com/data/home
--- 表达式模式的过滤都是放在 QUALIFY 里, 即数据查询、计算, 最后才到过滤条件
+DEFAULT_EXPR_FILTERS = """
+-- Filtering in expression mode is placed in QUALIFY, i.e., data query, calculation, and finally filtering conditions
 
 -- c_pct_rank(-return_90) <= 0.3
 -- c_pct_rank(return_30) <= 0.3
 -- cn_stock_bar1d.turn > 0.02
 """
 
-# 去除单引号内的内容字符串: instrument in ('jm2201.DCE') 避免抽取出 jm2201
+# Remove string content within single quotes: instrument in ('jm2201.DCE') to avoid extracting jm2201
 REMOVE_STRING_RE = re.compile(r"'[^']*'")
 TABLE_NAME_RE = re.compile(r"(?<!\.)\b[a-zA-Z_]\w*\b(?=\.[a-zA-Z_*])")
 
@@ -197,7 +190,7 @@ def _build_sql_from_expr(expr: str, expr_filters: str, default_tables="", order_
         table_list[i] += " " + join_usings.get(table_list[i], "USING(date, instrument)").strip()
     tables = "\n    JOIN ".join(table_list)
 
-    # 构建过滤添加，放到 QUALIFY 里
+    # Build filtering and place it in QUALIFY
     if expr_drop_na:
         filter_lines.append("COLUMNS(*) IS NOT NULL")
     qualify = ""
@@ -232,39 +225,38 @@ def _create_ds_from_sql(sql: str, extract_data: bool, base_ds=None):
 
 
 def run(
-    input_1: I.port("数据输入1, 如果有metadata extra, 会传递给输出 data", specific_type_name="DataSource", optional=True) = None,
-    input_2: I.port("数据输入2", specific_type_name="DataSource", optional=True) = None,
-    input_3: I.port("数据输入3", specific_type_name="DataSource", optional=True) = None,
-    mode: I.choice("输入模式", list(MODES.keys())) = MODE0,
+    input_1: I.port("Data Input 1, if there is metadata extra, it will be passed to the output data", specific_type_name="DataSource", optional=True) = None,
+    input_2: I.port("Data Input 2", specific_type_name="DataSource", optional=True) = None,
+    input_3: I.port("Data Input 3", specific_type_name="DataSource", optional=True) = None,
+    mode: I.choice("Input Mode", list(MODES.keys())) = MODE0,
     expr: I.code(
-        "表达式特征, 通过表达式构建特征, 简单易用",
+        "Expression features, build features through expressions, simple and easy to use",
         default=DEFAULT_EXPR,
         auto_complete_type="sql",
     ) = None,
     expr_filters: I.code(
-        "表达式过滤条件, 每行一个条件, 多个条件之间是 AND 关系, 条件内可以使用 OR 组合",
+        "Expression filters, each line is a condition, multiple conditions are AND related, conditions can use OR combination",
         default=DEFAULT_EXPR_FILTERS,
         auto_complete_type="sql",
     ) = None,
     expr_tables: I.str(
-        "表达式-默认数据表, 对于没有给出表名的字段, 默认来自这些表, 只填写需要的表, 可以提高性能, 多个表名用英文分号(;)分隔"
+        "Expression-default tables, for fields without specified table names, default from these tables, only fill in necessary tables, can improve performance, multiple table names separated by semicolons"
     ) = "cn_stock_prefactors",
-    extra_fields: I.str("表达式-其他字段, 其他需要包含的字段, 会与expr合并起来, 非特征字段一般放在这里, 多个字段用英文逗号分隔") = "date, instrument",
-    order_by: I.str("表达式-排序字段, 排序字段 e.g. date ASC, instrument DESC") = "date, instrument",
-    expr_drop_na: I.bool("表达式-移除空值, 去掉包含空值的行, 用于表达式模式的参数") = True,
+    extra_fields: I.str("Expression-other fields, other fields to include, merge with expr, non-feature fields generally placed here, multiple fields separated by commas") = "date, instrument",
+    order_by: I.str("Expression-order by fields, order by fields e.g. date ASC, instrument DESC") = "date, instrument",
+    expr_drop_na: I.bool("Expression-remove null values, remove rows containing null values, parameter for expression mode") = True,
     sql: I.code(
-        "SQL特征, 在SQL模式下, 通过SQL来构建特征, 更加灵活, 功能最全面。",
+        "SQL features, in SQL mode, build features through SQL, more flexible, most comprehensive functionality.",
         default=DEFAULT_SQL,
         auto_complete_type="sql",
     ) = None,
-    extract_data: I.bool("抽取数据, 是否抽取数据, 如果抽取数据, 将返回一个BDB DataSource, 包含数据DataFrame") = False,
-) -> [I.port("输出(SQL文件)", "data")]:
-    """输入特征（因子）数据"""
+    extract_data: I.bool("Extract data, whether to extract data, if extracted, returns a BDB DataSource containing DataFrame") = False,
+) -> [I.port("Output (SQL file)", "data")]:
 
     input_tables = _ds_to_tables([input_1, input_2, input_3])
 
-    if "；" in expr_tables:
-        logger.warning("检测到中文分号在 表达式-默认数据表 参数中，请使用英文分号。已自动替换，下次使用时请注意，否则可能导致意外的错误。")
+    if ";" in expr_tables:
+        logger.warning("Detected Chinese semicolon in Expression-default tables parameter, please use English semicolon. Automatically replaced, please note next time, otherwise it may lead to unexpected errors.")
         expr_tables = expr_tables.replace("；", ";")
 
     mode = MODES[mode]
@@ -286,21 +278,21 @@ def run(
     else:
         logger.info("sql mode")
         if sql is None:
-            logger.error("sql 模式下， SQL特征输入为空！")
+            logger.error("In SQL mode, SQL feature input is empty!")
             raise
 
         final_sql = sql
 
-    # 替换 input_*
+    # Replace input_*
     for x in input_tables["items"]:
         final_sql = re.sub(rf'\b{x["name"]}\b', x["table_id"], final_sql)
 
     final_sql = input_tables["sql"] + final_sql
 
-    # 使用第一个input ds的 extra
+    # Use extra from the first input ds
     return I.Outputs(data=_create_ds_from_sql(final_sql, extract_data, input_1))
 
 
 def post_run(outputs):
-    """后置运行函数"""
+    """Post-run function"""
     return outputs
